@@ -5,27 +5,11 @@
 #include <cmath>
 #include <random>
 
-/* start by writing device function
-    
-    takes in two shared memory buffers
-    
-    use this scan 
-    
-    use that in two kernels, chunks of an original array, scans and writes out largest values 
-    to larger array
-    
-    Kernel 2 takes in array of largest values and does a scan across those
-    
-    Final Kernel, takes in scanned chunks and the scanned max chunks
-    
-    post follow up to lecture on Piazza
-    
-    algorithm in lecture is inclusive 
-    we do exclusive scan
-*/
-
 
 constexpr int BLOCK_SIZE = 1024;
+
+
+//KERNEL 1
 __global__ void scan1(int *data_out, int *data_in, int *max, int N) {
         // data_out: output array
         // data_in: input array
@@ -34,38 +18,37 @@ __global__ void scan1(int *data_out, int *data_in, int *max, int N) {
         __shared__ int partial[BLOCK_SIZE * 2]; 
         
         int global_index = blockIdx.x * blockDim.x + threadIdx.x;
-        int thread = threadIdx.x;
-        // takes in two shared memory buffers
+        int myThread = threadIdx.x;
 
-        int buffer_output = 0;
-        int buffer_input = 1;
+        int buf_output = 0;
+        int buf_input = 1;
 
         if (global_index > 0 && global_index < N) {
-         partial[buffer_output * BLOCK_SIZE + thread] = data_out[global_index-1];
+         partial[buf_output * BLOCK_SIZE + myThread] = data_out[global_index-1];
         }else{
-         partial[buffer_output * BLOCK_SIZE + thread] = 0;
+         partial[buf_output * BLOCK_SIZE + myThread] = 0;
         }
        
        __syncthreads();          
 
-        for (int offset = 1; offset < BLOCK_SIZE; offset *= 2)   {
-                buffer_output = 1 - buffer_output;
-                buffer_input = 1 - buffer_output;
+        for (int i = 1; i < BLOCK_SIZE; i *= 2)   {
+                buf_output = 1 - buf_output;
+                buf_input = 1 - buf_output;
 
-            if (thread >= offset){
-                partial[buffer_output * BLOCK_SIZE + thread] = partial[buffer_input * BLOCK_SIZE + thread - offset] + partial[buffer_input * BLOCK_SIZE + thread];
+            if (myThread >= i){
+                partial[buf_output * BLOCK_SIZE + myThread] = partial[buf_input * BLOCK_SIZE + myThread - i] + partial[buf_input * BLOCK_SIZE + myThread];
             }else{
-                partial[buffer_output * BLOCK_SIZE + thread] = partial[buffer_input*BLOCK_SIZE+thread];
+                partial[buf_output * BLOCK_SIZE + myThread] = partial[buf_input*BLOCK_SIZE+myThread];
             }
             __syncthreads();                    
 
         }
         if (global_index < N) {
-            data_out[global_index] = partial[buffer_output * BLOCK_SIZE + thread];
+            data_out[global_index] = partial[buf_output * BLOCK_SIZE + myThread];
         }
-        // Write the max value of each chunk to a separate array   
-        if(thread == 0){
-            max[blockIdx.x] = partial[buffer_output * BLOCK_SIZE + BLOCK_SIZE -1];
+        // Write the max value to a separate array   
+        if(myThread == 0){
+            max[blockIdx.x] = partial[buf_output * BLOCK_SIZE + BLOCK_SIZE -1];
         }
     }
 /*
@@ -81,34 +64,34 @@ __global__ void scan2(int *data_out, int *data_in, int N) {
         __shared__ int partial[BLOCK_SIZE * 2]; 
         
         int global_index = blockIdx.x * blockDim.x + threadIdx.x;
-        int thread = threadIdx.x;
+        int myThread = threadIdx.x;
         // takes in two shared memory buffers
 
-        int buffer_output = 0;
-        int buffer_input = 1;
+        int buf_output = 0;
+        int buf_input = 1;
 
         if (global_index > 0 && global_index < N) {
-         partial[buffer_output * BLOCK_SIZE + thread] = data_out[global_index-1];
+         partial[buf_output * BLOCK_SIZE + myThread] = data_out[global_index-1];
         }else{
-         partial[buffer_output * BLOCK_SIZE + thread] = 0;
+         partial[buf_output * BLOCK_SIZE + myThread] = 0;
         }
        
        __syncthreads();          
 
         for (int offset = 1; offset < BLOCK_SIZE; offset *= 2)   {
-                buffer_output = 1 - buffer_output;
-                buffer_input = 1 - buffer_output;
+                buf_output = 1 - buf_output;
+                buf_input = 1 - buf_output;
 
-            if (thread >= offset){
-                partial[buffer_output * BLOCK_SIZE + thread] = partial[buffer_input * BLOCK_SIZE + thread - offset] + partial[buffer_input * BLOCK_SIZE + thread];
+            if (myThread >= offset){
+                partial[buf_output * BLOCK_SIZE + myThread] = partial[buf_input * BLOCK_SIZE + myThread - offset] + partial[buf_input * BLOCK_SIZE + myThread];
             }else{
-                partial[buffer_output * BLOCK_SIZE + thread] = partial[buffer_input*BLOCK_SIZE+thread];
+                partial[buf_output * BLOCK_SIZE + myThread] = partial[buf_input*BLOCK_SIZE+myThread];
             }
             __syncthreads();                    
 
         }
         if (global_index < N) {
-            data_out[global_index] = partial[buffer_output * BLOCK_SIZE + thread];
+            data_out[global_index] = partial[buf_output * BLOCK_SIZE + myThread];
         }
 
     }
@@ -162,26 +145,26 @@ int main(int argc, char ** argv) {
     
 
     // PERFORM NECESSARY VARIABLE DECLARATIONS HERE
-    int * buffer_output_1 = nullptr;
-    int * buffer_output_2 = nullptr;
-    int * buffer_output_3 = nullptr;
+    int * buf_output_1 = nullptr;
+    int * buf_output_2 = nullptr;
+    int * buf_output_3 = nullptr;
 
-    int * buffer_input_1 = nullptr;
+    int * buf_input_1 = nullptr;
     int chunks = ((values + BLOCK_SIZE - 1) / BLOCK_SIZE);
 
 
      //allocate memory
      // not sure the size ?
-    cudaMalloc(&buffer_output_1, sizeof(int) * values );
-    cudaMalloc(&buffer_output_2, sizeof(int) * chunks );
-    cudaMalloc(&buffer_output_3, sizeof(int) * chunks);
-    cudaMalloc(&buffer_input_1, sizeof(int) * values );
+    cudaMalloc(&buf_output_1, sizeof(int) * values );
+    cudaMalloc(&buf_output_2, sizeof(int) * chunks );
+    cudaMalloc(&buf_output_3, sizeof(int) * chunks);
+    cudaMalloc(&buf_input_1, sizeof(int) * values );
 
 
 
     //PERFORM NECESSARY DATA TRANSFER HERE
     // copy from host to device
-    cudaMemcpyAsync(buffer_input_1, data , sizeof(int) * values, cudaMemcpyHostToDevice, stream);
+    cudaMemcpyAsync(buf_input_1, data , sizeof(int) * values, cudaMemcpyHostToDevice, stream);
 
 
 
@@ -189,21 +172,21 @@ int main(int argc, char ** argv) {
     // K1
     dim3 block(BLOCK_SIZE);
     dim3 grid(chunks);
-    scan1<<<grid, block, 0, stream>>>(buffer_output_1, buffer_input_1,buffer_output_2, values);
+    scan1<<<grid, block, 0, stream>>>(buf_output_1, buf_input_1,buf_output_2, values);
 
     // K2
     dim3 block2(BLOCK_SIZE);
     dim3 grid2(1);
-    scan2<<<grid2, block2, 0, stream>>>(buffer_output_3, buffer_output_2, chunks);
+    scan2<<<grid2, block2, 0, stream>>>(buf_output_3, buf_output_2, chunks);
 
     // K3
-    scan3<<<grid,block,0,stream>>>(buffer_output_1, buffer_output_3, values);
+    scan3<<<grid,block,0,stream>>>(buf_output_1, buf_output_3, values);
 
     cudaEventRecord(end, stream);
  
 
     // PERFORM NECESSARY DATA TRANSFER HERE
-    cudaMemcpyAsync(h_output, buffer_output_1, sizeof(int) * values, cudaMemcpyDeviceToHost, stream);
+    cudaMemcpyAsync(h_output, buf_output_1, sizeof(int) * values, cudaMemcpyDeviceToHost, stream);
 
     cudaStreamSynchronize(stream);
 
@@ -220,9 +203,9 @@ int main(int argc, char ** argv) {
     }
 
     //FREE THE VARIABLES I USED
-    cudaFree(buffer_output_1);
-    cudaFree(buffer_output_2);
-    cudaFree(buffer_output_3);
+    cudaFree(buf_output_1);
+    cudaFree(buf_output_2);
+    cudaFree(buf_output_3);
 
     cudaEventDestroy(begin);
     cudaEventDestroy(end);
