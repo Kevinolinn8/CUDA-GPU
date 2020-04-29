@@ -220,9 +220,9 @@ int main(int argc, char ** argv) {
     }
 
     //FREE THE VARIABLES I USED
-    free(buffer_output_1);
-    free(buffer_output_2);
-    free(buffer_output_3);
+    cudaFree(buffer_output_1);
+    cudaFree(buffer_output_2);
+    cudaFree(buffer_output_3);
 
     cudaEventDestroy(begin);
     cudaEventDestroy(end);
