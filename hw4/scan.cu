@@ -11,20 +11,17 @@ constexpr int BLOCK_SIZE = 1024;
 
 //KERNEL 1
 __global__ void scan1(int *data_out, int *data_in, int *max, int N) {
-        // data_out: output array
-        // data_in: input array
-        // N: total values
-
+      
         __shared__ int partial[BLOCK_SIZE * 2]; 
         
-        int global_index = blockIdx.x * blockDim.x + threadIdx.x;
+        int my_index = blockIdx.x * blockDim.x + threadIdx.x;
         int myThread = threadIdx.x;
 
         int buf_output = 0;
         int buf_input = 1;
 
-        if (global_index > 0 && global_index < N) {
-         partial[buf_output * BLOCK_SIZE + myThread] = data_out[global_index-1];
+        if (my_index > 0 && my_index < N) {
+         partial[buf_output * BLOCK_SIZE + myThread] = data_out[my_index-1];
         }else{
          partial[buf_output * BLOCK_SIZE + myThread] = 0;
         }
@@ -43,35 +40,28 @@ __global__ void scan1(int *data_out, int *data_in, int *max, int N) {
             __syncthreads();                    
 
         }
-        if (global_index < N) {
-            data_out[global_index] = partial[buf_output * BLOCK_SIZE + myThread];
+        if (my_index < N) {
+            data_out[my_index] = partial[buf_output * BLOCK_SIZE + myThread];
         }
         // Write the max value to a separate array   
         if(myThread == 0){
             max[blockIdx.x] = partial[buf_output * BLOCK_SIZE + BLOCK_SIZE -1];
         }
     }
-/*
-KERNEL 2
-Scans the array of max valu to produce the offsets for the the final array
-*/
+
+//KERNEL 2
 __global__ void scan2(int *data_out, int *data_in, int N) {
-        // data_out: output array
-        // data_in: input array
-        // N: total values
-
-
         __shared__ int partial[BLOCK_SIZE * 2]; 
         
-        int global_index = blockIdx.x * blockDim.x + threadIdx.x;
+        int my_index = blockIdx.x * blockDim.x + threadIdx.x;
         int myThread = threadIdx.x;
         // takes in two shared memory buffers
 
         int buf_output = 0;
         int buf_input = 1;
 
-        if (global_index > 0 && global_index < N) {
-         partial[buf_output * BLOCK_SIZE + myThread] = data_out[global_index-1];
+        if (my_index > 0 && my_index < N) {
+         partial[buf_output * BLOCK_SIZE + myThread] = data_out[my_index-1];
         }else{
          partial[buf_output * BLOCK_SIZE + myThread] = 0;
         }
@@ -90,22 +80,19 @@ __global__ void scan2(int *data_out, int *data_in, int N) {
             __syncthreads();                    
 
         }
-        if (global_index < N) {
-            data_out[global_index] = partial[buf_output * BLOCK_SIZE + myThread];
+        if (my_index < N) {
+            data_out[my_index] = partial[buf_output * BLOCK_SIZE + myThread];
         }
 
     }
 
-
+//KERNEL 3
 __global__ void scan3(int *input_data, int *maxes, int N ) {
     
-    int global_index =  blockIdx.x * blockDim.x + threadIdx.x;
-    // global_index = 13, BLOCK_SIZE = 4, blockIdx.x = 3
-    if(global_index < N) {
-        input_data[global_index] += maxes[blockIdx.x]; 
+    int my_index =  blockIdx.x * blockDim.x + threadIdx.x;
+    if(my_index < N) {
+        input_data[my_index] += maxes[blockIdx.x]; 
     }
-
-
 }
 
 
@@ -144,17 +131,17 @@ int main(int argc, char ** argv) {
 
     
 
-    // PERFORM NECESSARY VARIABLE DECLARATIONS HERE
+    //VARIABLE DECLARATIONS
     int * buf_output_1 = nullptr;
+    int * buf_input_1 = nullptr;
+        
     int * buf_output_2 = nullptr;
     int * buf_output_3 = nullptr;
-
-    int * buf_input_1 = nullptr;
+    
     int chunks = ((values + BLOCK_SIZE - 1) / BLOCK_SIZE);
 
 
      //allocate memory
-     // not sure the size ?
     cudaMalloc(&buf_output_1, sizeof(int) * values );
     cudaMalloc(&buf_output_2, sizeof(int) * chunks );
     cudaMalloc(&buf_output_3, sizeof(int) * chunks);
@@ -162,30 +149,29 @@ int main(int argc, char ** argv) {
 
 
 
-    //PERFORM NECESSARY DATA TRANSFER HERE
     // copy from host to device
     cudaMemcpyAsync(buf_input_1, data , sizeof(int) * values, cudaMemcpyHostToDevice, stream);
 
 
 
     cudaEventRecord(begin, stream);
-    // K1
+        
+        
+    // KERNEL1
     dim3 block(BLOCK_SIZE);
     dim3 grid(chunks);
     scan1<<<grid, block, 0, stream>>>(buf_output_1, buf_input_1,buf_output_2, values);
 
-    // K2
+    // KERNEL2
     dim3 block2(BLOCK_SIZE);
     dim3 grid2(1);
     scan2<<<grid2, block2, 0, stream>>>(buf_output_3, buf_output_2, chunks);
 
-    // K3
+    // KERNEL3
     scan3<<<grid,block,0,stream>>>(buf_output_1, buf_output_3, values);
 
     cudaEventRecord(end, stream);
  
-
-    // PERFORM NECESSARY DATA TRANSFER HERE
     cudaMemcpyAsync(h_output, buf_output_1, sizeof(int) * values, cudaMemcpyDeviceToHost, stream);
 
     cudaStreamSynchronize(stream);
@@ -202,8 +188,9 @@ int main(int argc, char ** argv) {
         }
     }
 
-    //FREE THE VARIABLES I USED
+    //FREE CUDAFREE
     cudaFree(buf_output_1);
+    cudaFree(buf_input_1);
     cudaFree(buf_output_2);
     cudaFree(buf_output_3);
 
