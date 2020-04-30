@@ -9,16 +9,15 @@
 constexpr int BLOCK_SIZE = 1024;
 
 
-//KERNEL 1
+//KERNEL implementation 1
 __global__ void scan1(int *data_out, int *data_in, int *max, int N) {
       
         __shared__ int partial[BLOCK_SIZE * 2]; 
         
-        int my_index = blockIdx.x * blockDim.x + threadIdx.x;
-        int myThread = threadIdx.x;
-
         int buf_output = 0;
         int buf_input = 1;
+        int my_index = blockIdx.x * blockDim.x + threadIdx.x;
+        int myThread = threadIdx.x;
 
         if (my_index > 0 && my_index < N) {
          partial[buf_output * BLOCK_SIZE + myThread] = data_in[my_index-1];
@@ -43,22 +42,23 @@ __global__ void scan1(int *data_out, int *data_in, int *max, int N) {
         if (my_index < N) {
             data_out[my_index] = partial[buf_output * BLOCK_SIZE + myThread];
         }
-        // Write the max value to a separate array   
+        // Write into array 
         if(myThread == 0){
             max[blockIdx.x] = partial[buf_output * BLOCK_SIZE + BLOCK_SIZE -1];
         }
     }
 
-//KERNEL 2
+
+
+
+//KERNEL implementation 2
 __global__ void scan2(int *data_out, int *data_in, int N) {
         __shared__ int partial[BLOCK_SIZE * 2]; 
         
-        int my_index = blockIdx.x * blockDim.x + threadIdx.x;
-        int myThread = threadIdx.x;
-        // takes in two shared memory buffers
-
         int buf_output = 0;
         int buf_input = 1;
+        int my_index = blockIdx.x * blockDim.x + threadIdx.x;
+        int myThread = threadIdx.x;
 
         if (my_index > 0 && my_index < N) {
          partial[buf_output * BLOCK_SIZE + myThread] = data_in[my_index-1];
@@ -71,22 +71,22 @@ __global__ void scan2(int *data_out, int *data_in, int N) {
         for (int offset = 1; offset < BLOCK_SIZE; offset *= 2)   {
                 buf_output = 1 - buf_output;
                 buf_input = 1 - buf_output;
-
             if (myThread >= offset){
                 partial[buf_output * BLOCK_SIZE + myThread] = partial[buf_input * BLOCK_SIZE + myThread - offset] + partial[buf_input * BLOCK_SIZE + myThread];
             }else{
                 partial[buf_output * BLOCK_SIZE + myThread] = partial[buf_input*BLOCK_SIZE+myThread];
             }
             __syncthreads();                    
-
         }
         if (my_index < N) {
             data_out[my_index] = partial[buf_output * BLOCK_SIZE + myThread];
         }
+      }
 
-    }
 
-//KERNEL 3
+
+
+//KERNEL implementation 3
 __global__ void scan3(int *input_data, int *maxes, int N ) {
     
     int my_index =  blockIdx.x * blockDim.x + threadIdx.x;
@@ -94,6 +94,8 @@ __global__ void scan3(int *input_data, int *maxes, int N ) {
         input_data[my_index] += maxes[blockIdx.x]; 
     }
 }
+
+
 
 
 
@@ -107,6 +109,9 @@ int * serial_implementation(int * data, int vals) {
     
     return output;
 }
+
+
+
 
 int main(int argc, char ** argv) {
     
@@ -129,19 +134,20 @@ int main(int argc, char ** argv) {
 
     int * h_output = (int *)malloc(sizeof(int) * values); // THIS VARIABLE SHOULD HOLD THE TOTAL COUNT BY THE END
 
-    
+    //CUDA IMPLEMENTATIONS BELOW
 
-    //VARIABLE DECLARATIONS
+    //VARIABLES
     int * buf_output_1 = nullptr;
     int * buf_input_1 = nullptr;
         
     int * buf_output_2 = nullptr;
     int * buf_output_3 = nullptr;
-    
+      
+    //chunck size
     int chunks = ((values + BLOCK_SIZE - 1) / BLOCK_SIZE);
 
 
-     //allocate memory
+     //ALLOCATE MEMORY
     cudaMalloc(&buf_output_1, sizeof(int) * values );
     cudaMalloc(&buf_output_2, sizeof(int) * chunks );
     cudaMalloc(&buf_output_3, sizeof(int) * chunks);
@@ -149,11 +155,11 @@ int main(int argc, char ** argv) {
 
 
 
-    // copy from host to device
+    //HOST--->DEVICE
     cudaMemcpyAsync(buf_input_1, data , sizeof(int) * values, cudaMemcpyHostToDevice, stream);
 
 
-
+      //BEGIN
     cudaEventRecord(begin, stream);
         
         
@@ -170,12 +176,19 @@ int main(int argc, char ** argv) {
     // KERNEL3
     scan3<<<grid,block,0,stream>>>(buf_output_1, buf_output_3, values);
 
+      
+     //END
     cudaEventRecord(end, stream);
- 
+      
+      
+     //DEVICE---->HOST
     cudaMemcpyAsync(h_output, buf_output_1, sizeof(int) * values, cudaMemcpyDeviceToHost, stream);
 
     cudaStreamSynchronize(stream);
 
+      
+      
+      
     float ms;
     cudaEventElapsedTime(&ms, begin, end);
     printf("Elapsed time: %f ms\n", ms);
@@ -188,7 +201,7 @@ int main(int argc, char ** argv) {
         }
     }
 
-    //FREE CUDAFREE
+    //FREE CUDAFREE CUDA VARIABLES
     cudaFree(buf_output_1);
     cudaFree(buf_input_1);
     cudaFree(buf_output_2);
