@@ -8,36 +8,38 @@
 
 const int BLOCKSIZE = 32;
 constexpr float THRESHOLD = 1e-6f;
-// WRITE CUDA KERNEL FOR COUNT HERE
-__global__ void spmv(const int *pointer, const int *indices, const float *vals, const float *x, float *y) {
 
-    int thread = threadIdx.x;
+
+
+__global__ void spmv(const int *row_ptr, const int *col_ind, const float *vals, const float *x, float *y) {
+
+    int myThread = threadIdx.x;
     int block = blockDim.x;
     int row = blockIdx.x;
 
     __shared__ float sum[BLOCKSIZE];
 
-    int begin = pointer[row];
-    int end = pointer[row + 1];
+    int start = row_ptr[row];
+    int end = row_ptr[row + 1];
     
 
     float temp = 0.f;
-    for(int i = begin + thread; i < end; i+=block){
-        temp += vals[i] * x[indices[i]];
+    for(int i = start + myThread; i < end; i+=block){
+        temp += vals[i] * x[col_ind[i]];
     }
 
-    sum[thread] = temp;
+    sum[myThread] = temp;
     for(int stride = block/2; stride > 0; stride >>= 1){
 
         __syncthreads();
         
-        if(thread < stride){
-           sum[thread] += sum[thread + stride];
+        if(myThread < stride){
+           sum[myThread] += sum[myThread + stride];
         }
     }
     __syncthreads();
 
-    if(thread == 0){ 
+    if(myThread == 0){ 
     y[row] = sum[0];
     }
 }
@@ -104,18 +106,18 @@ int main(int argc, char ** argv) {
     float * returnArray = nullptr;
     
      //allocate memory
-    cudaMalloc(&sparse_matrix_gpu, sizeof(float) * values);
-    cudaMalloc(&dense_vector_gpu, sizeof(float) * cols);
+    cudaMalloc(&matrix_gpu, sizeof(float) * values);
+    cudaMalloc(&vector_gpu, sizeof(float) * cols);
     cudaMalloc(&ptr_gpu, sizeof(int) * (rows + 1));
     cudaMalloc(&indices_gpu, sizeof(int) * values);
-    cudaMalloc(&returnArray, sizeof(float) * rows);
+    cudaMalloc(&retarray, sizeof(float) * rows);
 
 
 
     //PERFORM NECESSARY DATA TRANSFER HERE
-    cudaMemcpyAsync(sparse_matrix_gpu, sparse_matrix, sizeof(float) * values, cudaMemcpyHostToDevice, stream);
+    cudaMemcpyAsync(matrix_gpu, sparse_matrix, sizeof(float) * values, cudaMemcpyHostToDevice, stream);
     cudaMemcpyAsync(ptr_gpu, ptr, sizeof(int) * (rows + 1), cudaMemcpyHostToDevice, stream);
-    cudaMemcpyAsync(dense_vector_gpu, dense_vector, sizeof(float) * cols, cudaMemcpyHostToDevice, stream);
+    cudaMemcpyAsync(vector_gpu, dense_vector, sizeof(float) * cols, cudaMemcpyHostToDevice, stream);
     cudaMemcpyAsync(indices_gpu, indices, sizeof(int) * values, cudaMemcpyHostToDevice, stream);
 
 
@@ -123,12 +125,12 @@ int main(int argc, char ** argv) {
     dim3 block(BLOCKSIZE);
     dim3 grid(rows);
     cudaEventRecord(begin, stream);
-    spmv<<<grid,block,0,stream>>>(ptr_gpu,indices_gpu, sparse_matrix_gpu, dense_vector_gpu, returnArray);
+    spmv<<<grid,block,0,stream>>>(ptr_gpu,indices_gpu, matrix_gpu, vector_gpu, retarray);
     cudaEventRecord(end, stream);
  
 
    // PERFORM NECESSARY DATA TRANSFER HERE
-    cudaMemcpyAsync(h_output, returnArray, sizeof(float) * rows, cudaMemcpyDeviceToHost, stream);
+    cudaMemcpyAsync(h_output, retarray, sizeof(float) * rows, cudaMemcpyDeviceToHost, stream);
 
 
     cudaStreamSynchronize(stream);
@@ -151,11 +153,11 @@ int main(int argc, char ** argv) {
 
 
     //FREE THE VARIABLES I USED
-    free(sparse_matrix_gpu);
-    free(dense_vector_gpu);
-    free(ptr_gpu);
-    free(indices_gpu);
-    free(returnArray);
+    cudaFree(matrix_gpu);
+    cudaFree(vector_gpu);
+    cudaFree(ptr_gpu);
+    cudaFree(indices_gpu);
+    cudaFree(retarray);
     free(reference_output);
     free(h_output);
     cudaEventDestroy(begin);
