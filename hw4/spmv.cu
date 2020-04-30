@@ -60,11 +60,13 @@ float * serial_implementation(float * sparse_matrix, int * ptr, int * indices, f
     return output;
 }
 
+
+
 int main(int argc, char ** argv) {
     
     assert(argc == 2);
     
-    // input_cpu
+    
     float * sparse_matrix = nullptr; 
     float * dense_vector = nullptr;
     int * ptr = nullptr;
@@ -91,23 +93,21 @@ int main(int argc, char ** argv) {
 
     float * h_output = (float *)malloc(sizeof(float) * rows); // THIS VARIABLE SHOULD HOLD THE TOTAL COUNT BY THE END
 
-    
+    //GPU IMPLEMENTATION BELOW
 
-    // VARIABLE DECLARATIONS
+    // VARIABLES
     float * retarray = nullptr;
     float * GPUmatrix = nullptr;
     float * GPUvector = nullptr;
     int * GPUptr = nullptr;
     int * ind_gpu = nullptr;
     
-     //allocate memory
+     //ALLOCATE MEMORY
     cudaMalloc(&GPUmatrix, sizeof(float) * values);
     cudaMalloc(&GPUvector, sizeof(float) * cols);
     cudaMalloc(&GPUptr, sizeof(int) * (rows + 1));
     cudaMalloc(&ind_gpu, sizeof(int) * values);
     cudaMalloc(&retarray, sizeof(float) * rows);
-
-
 
     //DATA TRANSFER
     cudaMemcpyAsync(GPUmatrix, sparse_matrix, sizeof(float) * values, cudaMemcpyHostToDevice, stream);
@@ -119,9 +119,14 @@ int main(int argc, char ** argv) {
     dim3 block(BLOCKSIZE);
     dim3 grid(rows);
     
-    // LAUNCH KERNEL
+    //START
     cudaEventRecord(begin, stream);
+    
+    // LAUNCH KERNEL
     spmv<<<grid,block,0,stream>>>(GPUptr,ind_gpu, GPUmatrix, GPUvector, retarray);
+    
+    
+    //END
     cudaEventRecord(end, stream);
  
 
