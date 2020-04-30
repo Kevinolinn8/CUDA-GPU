@@ -154,8 +154,6 @@ int main(int argc, char ** argv) {
     cudaFree(GPUptr);
     cudaFree(ind_gpu);
     cudaFree(retarray);
-    free(reference_output);
-    free(h_output);
     cudaEventDestroy(begin);
     cudaEventDestroy(end);
     cudaStreamDestroy(stream);
