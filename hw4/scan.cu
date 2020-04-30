@@ -21,7 +21,7 @@ __global__ void scan1(int *data_out, int *data_in, int *max, int N) {
         int buf_input = 1;
 
         if (my_index > 0 && my_index < N) {
-         partial[buf_output * BLOCK_SIZE + myThread] = data_out[my_index-1];
+         partial[buf_output * BLOCK_SIZE + myThread] = data_in[my_index-1];
         }else{
          partial[buf_output * BLOCK_SIZE + myThread] = 0;
         }
@@ -33,7 +33,7 @@ __global__ void scan1(int *data_out, int *data_in, int *max, int N) {
                 buf_input = 1 - buf_output;
 
             if (myThread >= i){
-                partial[buf_input * BLOCK_SIZE + myThread] = partial[buf_input * BLOCK_SIZE + myThread - i] + partial[buf_input * BLOCK_SIZE + myThread];
+                partial[buf_output * BLOCK_SIZE + myThread] = partial[buf_input * BLOCK_SIZE + myThread - i] + partial[buf_input * BLOCK_SIZE + myThread];
             }else{
                 partial[buf_output * BLOCK_SIZE + myThread] = partial[buf_input*BLOCK_SIZE+myThread];
             }
@@ -61,7 +61,7 @@ __global__ void scan2(int *data_out, int *data_in, int N) {
         int buf_input = 1;
 
         if (my_index > 0 && my_index < N) {
-         partial[buf_output * BLOCK_SIZE + myThread] = data_out[my_index-1];
+         partial[buf_output * BLOCK_SIZE + myThread] = data_in[my_index-1];
         }else{
          partial[buf_output * BLOCK_SIZE + myThread] = 0;
         }
@@ -73,7 +73,7 @@ __global__ void scan2(int *data_out, int *data_in, int N) {
                 buf_input = 1 - buf_output;
 
             if (myThread >= offset){
-                partial[buf_input * BLOCK_SIZE + myThread] = partial[buf_input * BLOCK_SIZE + myThread - offset] + partial[buf_input * BLOCK_SIZE + myThread];
+                partial[buf_output * BLOCK_SIZE + myThread] = partial[buf_input * BLOCK_SIZE + myThread - offset] + partial[buf_input * BLOCK_SIZE + myThread];
             }else{
                 partial[buf_output * BLOCK_SIZE + myThread] = partial[buf_input*BLOCK_SIZE+myThread];
             }
