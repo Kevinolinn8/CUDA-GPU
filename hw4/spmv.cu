@@ -7,7 +7,7 @@
 #include "util.h"
 
 const int BLOCKSIZE = 32;
-constexpr float THRESHOLD = 1e-6f;
+constexpr float THRESHOLD = 1e-5f;
 
 
 
