@@ -74,8 +74,8 @@ int main(int argc, char ** argv) {
     
 
     //input_gpu
-    float * sparse_matrix_gpu = nullptr;
-    float * dense_vector_gpu = nullptr;
+    float * matrix_gpu = nullptr;
+    float * vector_gpu = nullptr;
     int * ptr_gpu = nullptr;
     int * indices_gpu = nullptr;
     
@@ -103,7 +103,7 @@ int main(int argc, char ** argv) {
 
     // PERFORM NECESSARY VARIABLE DECLARATIONS HERE
     //int * data = read_file(argv[1], &rows, &cols);
-    float * returnArray = nullptr;
+    float * retarray = nullptr;
     
      //allocate memory
     cudaMalloc(&matrix_gpu, sizeof(float) * values);
